@@ -18,7 +18,63 @@
 			<artifactId>mysql-connector-java</artifactId>
 		</dependency>
 ```
-## 2.@EnableWebSecurity配置类
+## 2.MyUserDetailsService自定义逻辑，继承UserDetailsService类
+```java
+package com.example.demo.service;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+import org.springframework.util.Assert;
+
+import com.example.demo.dao.UserSelfDao;
+import com.example.demo.entity.UserSelf;
+
+/**
+ * @author   czq
+ * @Date 2020-08-18 15:12:15    
+ */
+@Service
+public class MyUserDetailsService implements UserDetailsService{
+	
+	@Autowired
+	private UserSelfDao userSelfDao;
+
+	@Override
+	public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+		// TODO Auto-generated method stub
+		
+
+		UserSelf userSelf=userSelfDao.findByUserName(username);
+		Assert.isTrue(userSelf!=null, "用户不存在");
+		
+		userSelf.setAuthrities(AuthorityUtils.commaSeparatedStringToAuthorityList(userSelf.getRoles()));
+		userSelf.setAuthrities(generateAuthorities(userSelf.getRoles()));
+		return userSelf;
+	}
+	
+	private List<GrantedAuthority> generateAuthorities(String roles){
+		List<GrantedAuthority> authorities=new ArrayList<GrantedAuthority>();
+		String[] roleArray=roles.split(",");
+		if(roles!=null&&!"".equals(roles)) {
+			for(String role:roleArray) {
+				authorities.add(new SimpleGrantedAuthority(role));
+			}
+		}
+		return authorities;
+	}
+
+}
+```
+## 3.@EnableWebSecurity配置类,注入自定义逻辑
 ```java
 package com.example.demo.config;
 
@@ -26,6 +82,8 @@ import javax.sql.DataSource;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
@@ -34,6 +92,8 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.NoOpPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.JdbcUserDetailsManager;
+
+import com.example.demo.service.MyUserDetailsService;
 
 /**
  * @author   czq
@@ -53,7 +113,7 @@ import org.springframework.security.provisioning.JdbcUserDetailsManager;
 public class WebSecurityConfig extends WebSecurityConfigurerAdapter{
 
 	@Autowired
-	private DataSource dataSource;
+	private MyUserDetailsService myUserDetailsService;
 	
 	@Override
 	protected void configure(HttpSecurity http) throws Exception{
@@ -68,20 +128,17 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter{
 		.csrf().disable();
 	}
 	
-	@Override
-	@Bean
-	public UserDetailsService userDetailsService() {
-		JdbcUserDetailsManager manager=new JdbcUserDetailsManager();
-		manager.setDataSource(dataSource);
-		if(!manager.userExists("user")) {
-			manager.createUser(User.withUsername("user").password("123").roles("USER").build());
-		}
-		if(!manager.userExists("admin")) {
-			manager.createUser(User.withUsername("admin").password("123").roles("USER","ADMIN").build());
-		}
-		
-		return manager;
-	}
+	 @Override
+	    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+	        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+	        //引入自定义的编码
+	        authProvider.setPasswordEncoder(passwordEncoder());
+	        //引入自定义的类
+	        authProvider.setUserDetailsService(myUserDetailsService);
+
+	        auth.authenticationProvider(authProvider);
+
+	    }
 	
 	@Bean
 	public PasswordEncoder passwordEncoder() {
@@ -89,13 +146,14 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter{
 	}
 
 }
+
 ```
 WebSecurityConfigurerAdapter有3中configure配置情况，我们取一个就好
 protected void configure(AuthenticationManagerBuilder auth)
 public void configure(WebSecurity web) throws Exception
 protected void configure(HttpSecurity http) throws Exception
 
-## 3.application.properties，增加数据库连接
+## 4.application.properties，增加数据库连接
 ```
 spring.datasource.url=jdbc:mysql://192.168.11.10:3306/test?characterEncoding=utf8&useSSL=false&serverTimezone=GMT%2B8&rewriteBatchedStatements=true
 spring.datasource.username=mms
@@ -108,40 +166,26 @@ spring.datasource.hikari.minimum-idle=1
 SET FOREIGN_KEY_CHECKS=0;
 
 -- ----------------------------
--- Table structure for `authorities`
+-- Table structure for `user_self`
 -- ----------------------------
-DROP TABLE IF EXISTS `authorities`;
-CREATE TABLE `authorities` (
-  `username` varchar(50) NOT NULL,
-  `authority` varchar(50) NOT NULL,
-  UNIQUE KEY `ix_auth_username` (`username`,`authority`),
-  CONSTRAINT `fk_authorities_users` FOREIGN KEY (`username`) REFERENCES `users` (`username`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+DROP TABLE IF EXISTS `user_self`;
+CREATE TABLE `user_self` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `username` varchar(50) DEFAULT NULL,
+  `password` varchar(60) DEFAULT NULL,
+  `enable` tinyint(4) DEFAULT '1',
+  `roles` text COMMENT '用户角色，多个角色之间用都好隔开',
+  PRIMARY KEY (`id`),
+  KEY `username` (`username`) USING HASH
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;
 
 -- ----------------------------
--- Records of authorities
+-- Records of user_self
 -- ----------------------------
-INSERT INTO `authorities` VALUES ('admin', 'ROLE_ADMIN');
-INSERT INTO `authorities` VALUES ('admin', 'ROLE_USER');
-INSERT INTO `authorities` VALUES ('user', 'ROLE_USER');
-
--- ----------------------------
--- Table structure for `users`
--- ----------------------------
-DROP TABLE IF EXISTS `users`;
-CREATE TABLE `users` (
-  `username` varchar(50) NOT NULL,
-  `password` varchar(500) NOT NULL,
-  `enabled` tinyint(1) NOT NULL,
-  PRIMARY KEY (`username`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
--- ----------------------------
--- Records of users
--- ----------------------------
-INSERT INTO `users` VALUES ('admin', '123', '1');
-INSERT INTO `users` VALUES ('user', '123', '1');
+INSERT INTO `user_self` VALUES ('1', 'admin', '123', '1', 'ROLE_ADMIN,ROLE_USER');
+INSERT INTO `user_self` VALUES ('2', 'user', '123', '1', 'ROLE_USER');
 ```
+下面常规的mybatis配置，我就不写了
 ## 5.登录跳转成功后，会访问/路径
 ```java
 @RestController
