@@ -368,39 +368,24 @@ spring.datasource.hikari.minimum-idle=1
 SET FOREIGN_KEY_CHECKS=0;
 
 -- ----------------------------
--- Table structure for `authorities`
+-- Table structure for `user_self`
 -- ----------------------------
-DROP TABLE IF EXISTS `authorities`;
-CREATE TABLE `authorities` (
-  `username` varchar(50) NOT NULL,
-  `authority` varchar(50) NOT NULL,
-  UNIQUE KEY `ix_auth_username` (`username`,`authority`),
-  CONSTRAINT `fk_authorities_users` FOREIGN KEY (`username`) REFERENCES `users` (`username`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+DROP TABLE IF EXISTS `user_self`;
+CREATE TABLE `user_self` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `username` varchar(50) DEFAULT NULL,
+  `password` varchar(60) DEFAULT NULL,
+  `enable` tinyint(4) DEFAULT '1',
+  `roles` text COMMENT '用户角色，多个角色之间用都好隔开',
+  PRIMARY KEY (`id`),
+  KEY `username` (`username`) USING HASH
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8;
 
 -- ----------------------------
--- Records of authorities
+-- Records of user_self
 -- ----------------------------
-INSERT INTO `authorities` VALUES ('admin', 'ROLE_ADMIN');
-INSERT INTO `authorities` VALUES ('admin', 'ROLE_USER');
-INSERT INTO `authorities` VALUES ('user', 'ROLE_USER');
-
--- ----------------------------
--- Table structure for `users`
--- ----------------------------
-DROP TABLE IF EXISTS `users`;
-CREATE TABLE `users` (
-  `username` varchar(50) NOT NULL,
-  `password` varchar(500) NOT NULL,
-  `enabled` tinyint(1) NOT NULL,
-  PRIMARY KEY (`username`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
--- ----------------------------
--- Records of users
--- ----------------------------
-INSERT INTO `users` VALUES ('admin', '123', '1');
-INSERT INTO `users` VALUES ('user', '123', '1');
+INSERT INTO `user_self` VALUES ('1', 'admin', '123', '1', 'ROLE_ADMIN,ROLE_USER');
+INSERT INTO `user_self` VALUES ('2', 'user', '123', '1', 'ROLE_USER');
 ```
 ## 9.登录跳转成功后，会访问/路径
 ```java
